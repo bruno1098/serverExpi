@@ -1,14 +1,13 @@
-const http = require('http');
 const WebSocket = require('ws');
 
-const server = http.createServer();
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ port: 8080 });
 
 wss.on('connection', (ws) => {
   console.log('Novo cliente conectado');
 
   ws.on('message', (message) => {
     console.log('Mensagem recebida:', message);
+    // Aqui, transmitimos a mensagem para todos os clientes conectados
     wss.clients.forEach((client) => {
       if (client !== ws && client.readyState === WebSocket.OPEN) {
         client.send(message);
@@ -16,12 +15,13 @@ wss.on('connection', (ws) => {
     });
   });
 
+  ws.on('error', (error) => {
+    console.error('Erro na conexão WebSocket:', error);
+  });
+
   ws.on('close', () => {
     console.log('Cliente desconectado');
   });
 });
 
-const PORT = process.env.PORT || 8080;
-server.listen(PORT, () => {
-  console.log(`Servidor WebSocket rodando na porta ${PORT}`);
-});
+console.log('Servidor WebSocket rodando na porta 8080');
