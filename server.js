@@ -21,6 +21,7 @@ const wss = new WebSocket.Server({ noServer: true });
 
 // Lidar com a requisição de upgrade para WebSocket
 server.on('upgrade', (req, socket, head) => {
+  
   if (req.url === '/ws') {  // Rota específica para o WebSocket
     wss.handleUpgrade(req, socket, head, (ws) => {
       wss.emit('connection', ws, req);
