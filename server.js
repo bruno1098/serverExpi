@@ -3,25 +3,36 @@ const WebSocket = require('ws');
 
 // Criar o servidor HTTP
 const server = http.createServer((req, res) => {
-  res.writeHead(404);
-  res.end('Not Found');
+  // Rota simples para verificação
+  if (req.url === '/') {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Servidor WebSocket ativo');
+  } else {
+    res.writeHead(404);
+    res.end('Not Found');
+  }
 });
 
-// Use a porta fornecida pelo Heroku ou padrão para 8080 em desenvolvimento local
+// Porta dinâmica do Heroku ou local (8080)
 const PORT = process.env.PORT || 8080;
 
-// Criar o servidor WebSocket com base no servidor HTTP
+// Criação do servidor WebSocket sobre o HTTP
 const wss = new WebSocket.Server({ noServer: true });
 
-// Lidar com as conexões WebSocket
-server.on('upgrade', (request, socket, head) => {
-  wss.handleUpgrade(request, socket, head, (ws) => {
-    wss.emit('connection', ws, request);
-  });
+// Lidar com a requisição de upgrade para WebSocket
+server.on('upgrade', (req, socket, head) => {
+  if (req.url === '/ws') {  // Rota específica para o WebSocket
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      wss.emit('connection', ws, req);
+    });
+  } else {
+    socket.destroy();
+  }
 });
 
+// Configuração do WebSocket
 wss.on('connection', (ws) => {
-  console.log('Novo cliente conectado');
+  console.log('Novo cliente WebSocket conectado');
 
   ws.on('message', (message) => {
     console.log('Mensagem recebida:', message);
@@ -35,11 +46,11 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
-    console.log('Cliente desconectado');
+    console.log('Cliente WebSocket desconectado');
   });
 });
 
-// Iniciar o servidor na porta correta
+// Iniciar o servidor HTTP
 server.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });
