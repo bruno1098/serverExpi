@@ -1,21 +1,7 @@
 const http = require('http');
 const WebSocket = require('ws');
 
-// Utilize a porta fornecida pelo Heroku
-const PORT = process.env.PORT || 8080;
-
-// Crie um servidor HTTP simples
-const server = http.createServer((req, res) => {
-  if (req.method === 'GET' && req.url === '/') {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Servidor WebSocket ativo\n');
-  } else {
-    res.writeHead(404, { 'Content-Type': 'text/plain' });
-    res.end('Página não encontrada\n');
-  }
-});
-
-// Inicialize o WebSocket Server com o servidor HTTP
+const server = http.createServer();
 const wss = new WebSocket.Server({ server });
 
 wss.on('connection', (ws) => {
@@ -35,7 +21,7 @@ wss.on('connection', (ws) => {
   });
 });
 
-// Escute na porta designada pelo Heroku
+const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+  console.log(`Servidor WebSocket rodando na porta ${PORT}`);
 });
