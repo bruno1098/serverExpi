@@ -1,15 +1,16 @@
 const http = require('http');
 const WebSocket = require('ws');
 
-// Criar um servidor HTTP que o Heroku entende
+// Criar o servidor HTTP
 const server = http.createServer((req, res) => {
   res.writeHead(200);
   res.end('Servidor WebSocket está rodando!');
 });
 
-// Porta dinâmica atribuída pelo Heroku ou localmente na 8080
+// Use a porta fornecida pelo Heroku ou padrão para 8080 em desenvolvimento local
 const PORT = process.env.PORT || 8080;
 
+// Criar o servidor WebSocket usando o servidor HTTP
 const wss = new WebSocket.Server({ server });
 
 wss.on('connection', (ws) => {
@@ -17,7 +18,8 @@ wss.on('connection', (ws) => {
 
   ws.on('message', (message) => {
     console.log('Mensagem recebida:', message);
-    // Aqui, transmitimos a mensagem para todos os clientes conectados
+
+    // Enviar mensagem para todos os clientes conectados
     wss.clients.forEach((client) => {
       if (client !== ws && client.readyState === WebSocket.OPEN) {
         client.send(message);
@@ -25,16 +27,12 @@ wss.on('connection', (ws) => {
     });
   });
 
-  ws.on('error', (error) => {
-    console.error('Erro na conexão WebSocket:', error);
-  });
-
   ws.on('close', () => {
     console.log('Cliente desconectado');
   });
 });
 
-// Servidor deve ouvir na porta correta
+// Escutar a porta correta
 server.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });
