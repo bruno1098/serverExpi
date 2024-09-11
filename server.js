@@ -19,9 +19,11 @@ const PORT = process.env.PORT || 8080;
 // Criação do servidor WebSocket sobre o HTTP
 const wss = new WebSocket.Server({ noServer: true });
 
+// Mapa de usuários em cada canal
+const users = {};
+
 // Lidar com a requisição de upgrade para WebSocket
 server.on('upgrade', (req, socket, head) => {
-  
   if (req.url === '/ws') {  // Rota específica para o WebSocket
     wss.handleUpgrade(req, socket, head, (ws) => {
       wss.emit('connection', ws, req);
@@ -35,19 +37,66 @@ server.on('upgrade', (req, socket, head) => {
 wss.on('connection', (ws) => {
   console.log('Novo cliente WebSocket conectado');
 
+  // Atribui um ID único para o cliente
+  ws.id = Math.random().toString(36).substring(2, 15);
+
   ws.on('message', (message) => {
     console.log('Mensagem recebida:', message);
+    const data = JSON.parse(message);
 
-    // Enviar a mensagem para todos os clientes conectados
-    wss.clients.forEach((client) => {
-      if (client !== ws && client.readyState === WebSocket.OPEN) {
-        client.send(message);
+    // Trata as mensagens
+    if (data.type === 'join') {
+      const channel = data.channel;
+      if (!users[channel]) {
+        users[channel] = [];
       }
-    });
+      users[channel].push(ws);
+      ws.send(JSON.stringify({
+        type: 'users',
+        users: users[channel].map((user) => user.id),
+      }));
+    } else if (data.type === 'leave') {
+      const channel = data.channel;
+      users[channel] = users[channel].filter((user) => user !== ws);
+      // Avisar os outros usuários do canal sobre a saída
+      users[channel].forEach((user) => {
+        if (user !== ws) {
+          user.send(JSON.stringify({
+            type: 'users',
+            users: users[channel].map((user) => user.id),
+          }));
+        }
+      });
+    } else if (data.type === 'signal') {
+      const channel = data.channel;
+      // Reenviar sinal para todos os outros usuários do canal
+      users[channel].forEach((user) => {
+        if (user !== ws) {
+          user.send(JSON.stringify({
+            type: 'signal',
+            data: data.data,
+            channel: channel,
+          }));
+        }
+      });
+    }
   });
 
   ws.on('close', () => {
     console.log('Cliente WebSocket desconectado');
+    // Remover o cliente de todos os canais em que ele está
+    for (const channel in users) {
+      users[channel] = users[channel].filter((user) => user !== ws);
+      // Avisar os outros usuários do canal sobre a saída
+      users[channel].forEach((user) => {
+        if (user !== ws) {
+          user.send(JSON.stringify({
+            type: 'users',
+            users: users[channel].map((user) => user.id),
+          }));
+        }
+      });
+    }
   });
 });
 
