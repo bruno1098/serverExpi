@@ -3,6 +3,7 @@ const WebSocket = require('ws');
 
 // Criar o servidor HTTP
 const server = http.createServer((req, res) => {
+  // Rota simples para verificação
   if (req.url === '/') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('Servidor WebSocket ativo');
@@ -20,7 +21,8 @@ const wss = new WebSocket.Server({ noServer: true });
 
 // Lidar com a requisição de upgrade para WebSocket
 server.on('upgrade', (req, socket, head) => {
-  if (req.url === '/ws') {
+  
+  if (req.url === '/ws') {  // Rota específica para o WebSocket
     wss.handleUpgrade(req, socket, head, (ws) => {
       wss.emit('connection', ws, req);
     });
@@ -29,43 +31,23 @@ server.on('upgrade', (req, socket, head) => {
   }
 });
 
-// Associar um id a cada cliente conectado
-let clientId = 0;
-const clients = {};
-
 // Configuração do WebSocket
 wss.on('connection', (ws) => {
-  clientId++;
-  const userId = `user-${clientId}`;
-  clients[userId] = ws; // Armazena o cliente pelo ID
+  console.log('Novo cliente WebSocket conectado');
 
-  console.log(`Novo cliente WebSocket conectado: ${userId}`);
-
-  // Quando uma mensagem é recebida
   ws.on('message', (message) => {
-    console.log(`Mensagem recebida de ${userId}:`, message);
+    console.log('Mensagem recebida:', message);
 
-    const parsedMessage = JSON.parse(message);
-
-    // Enviar a mensagem para o cliente alvo (target), se especificado
-    if (parsedMessage.targetId && clients[parsedMessage.targetId]) {
-      const targetClient = clients[parsedMessage.targetId];
-      if (targetClient.readyState === WebSocket.OPEN) {
-        targetClient.send(message); // Enviar a mensagem apenas ao peer específico
+    // Enviar a mensagem para todos os clientes conectados
+    wss.clients.forEach((client) => {
+      if (client !== ws && client.readyState === WebSocket.OPEN) {
+        client.send(message);
       }
-    } else {
-      // Caso não haja um target específico, envia para todos menos o próprio cliente
-      wss.clients.forEach((client) => {
-        if (client !== ws && client.readyState === WebSocket.OPEN) {
-          client.send(message);
-        }
-      });
-    }
+    });
   });
 
   ws.on('close', () => {
-    console.log(`Cliente WebSocket desconectado: ${userId}`);
-    delete clients[userId]; // Remove o cliente desconectado
+    console.log('Cliente WebSocket desconectado');
   });
 });
 
