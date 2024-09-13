@@ -19,9 +19,6 @@ const PORT = process.env.PORT || 8080;
 // Criação do servidor WebSocket sobre o HTTP
 const wss = new WebSocket.Server({ noServer: true });
 
-// Mapa de usuários em cada canal
-const users = {};
-
 // Lidar com a requisição de upgrade para WebSocket
 server.on('upgrade', (req, socket, head) => {
   if (req.url === '/ws') {  // Rota específica para o WebSocket
@@ -29,78 +26,75 @@ server.on('upgrade', (req, socket, head) => {
       wss.emit('connection', ws, req);
     });
   } else {
+    socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
     socket.destroy();
   }
 });
 
+// Função para monitorar conexões WebSocket inativas
+const monitorConnections = () => {
+  wss.clients.forEach((client) => {
+    if (client.isAlive === false) {
+      console.log('Conexão inativa removida');
+      return client.terminate();
+    }
+    client.isAlive = false;
+    client.ping(() => {}); // Envia um ping para verificar se a conexão está viva
+  });
+};
+
+// Intervalo para verificar as conexões a cada 30 segundos
+const interval = setInterval(monitorConnections, 30000);
+
 // Configuração do WebSocket
 wss.on('connection', (ws) => {
   console.log('Novo cliente WebSocket conectado');
+  ws.isAlive = true; // Define a conexão como ativa
 
-  // Atribui um ID único para o cliente
-  ws.id = Math.random().toString(36).substring(2, 15);
+  // Ao receber um pong (resposta ao ping), marque a conexão como ativa
+  ws.on('pong', () => {
+    ws.isAlive = true;
+  });
 
+  // Tratamento de mensagens
   ws.on('message', (message) => {
-    console.log('Mensagem recebida:', message);
-    const data = JSON.parse(message);
+    try {
+      const data = JSON.parse(message); // Converte a mensagem para JSON
+      console.log('Mensagem recebida:', data);
 
-    // Trata as mensagens
-    if (data.type === 'join') {
-      const channel = data.channel;
-      if (!users[channel]) {
-        users[channel] = [];
+      // Enviar uma confirmação (ACK) de que a mensagem foi recebida
+      ws.send(JSON.stringify({ type: 'ack', status: 'received', id: data.id }));
+
+      if (data.type && data.signalData) {
+        // Enviar a mensagem para todos os outros clientes conectados
+        wss.clients.forEach((client) => {
+          if (client !== ws && client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify(data));
+          }
+        });
       }
-      users[channel].push(ws);
-      ws.send(JSON.stringify({
-        type: 'users',
-        users: users[channel].map((user) => user.id),
-      }));
-    } else if (data.type === 'leave') {
-      const channel = data.channel;
-      users[channel] = users[channel].filter((user) => user !== ws);
-      // Avisar os outros usuários do canal sobre a saída
-      users[channel].forEach((user) => {
-        if (user !== ws) {
-          user.send(JSON.stringify({
-            type: 'users',
-            users: users[channel].map((user) => user.id),
-          }));
-        }
-      });
-    } else if (data.type === 'signal') {
-      const channel = data.channel;
-      // Reenviar sinal para todos os outros usuários do canal
-      users[channel].forEach((user) => {
-        if (user !== ws) {
-          user.send(JSON.stringify({
-            type: 'signal',
-            data: data.data,
-            channel: channel,
-          }));
-        }
-      });
+    } catch (error) {
+      console.error('Erro ao processar a mensagem recebida:', error);
     }
   });
 
+  // Tratamento de desconexão
   ws.on('close', () => {
     console.log('Cliente WebSocket desconectado');
-    // Remover o cliente de todos os canais em que ele está
-    for (const channel in users) {
-      users[channel] = users[channel].filter((user) => user !== ws);
-      // Avisar os outros usuários do canal sobre a saída
-      users[channel].forEach((user) => {
-        if (user !== ws) {
-          user.send(JSON.stringify({
-            type: 'users',
-            users: users[channel].map((user) => user.id),
-          }));
-        }
-      });
-    }
+  });
+
+  // Tratamento de erros
+  ws.on('error', (error) => {
+    console.error('Erro no WebSocket:', error);
   });
 });
 
 // Iniciar o servidor HTTP
 server.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
+});
+
+// Quando o servidor é fechado, limpa o intervalo de monitoramento
+wss.on('close', () => {
+  clearInterval(interval);
 });
