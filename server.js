@@ -21,70 +21,33 @@ const wss = new WebSocket.Server({ noServer: true });
 
 // Lidar com a requisição de upgrade para WebSocket
 server.on('upgrade', (req, socket, head) => {
+  
   if (req.url === '/ws') {  // Rota específica para o WebSocket
     wss.handleUpgrade(req, socket, head, (ws) => {
       wss.emit('connection', ws, req);
     });
   } else {
-    socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
     socket.destroy();
   }
 });
-
-// Mapeamento de userId para WebSocket
-const clients = {};
 
 // Configuração do WebSocket
 wss.on('connection', (ws) => {
   console.log('Novo cliente WebSocket conectado');
 
   ws.on('message', (message) => {
-    try {
-      const data = JSON.parse(message); // Converte a mensagem para JSON
-      console.log('Mensagem recebida:', data);
+    console.log('Mensagem recebida:', message);
 
-      if (data.type === 'register') {
-        // Registrar o userId
-        ws.userId = data.userId;
-        clients[data.userId] = ws;
-        console.log(`Usuário registrado: ${data.userId}`);
-        return;
+    // Enviar a mensagem para todos os clientes conectados
+    wss.clients.forEach((client) => {
+      if (client !== ws && client.readyState === WebSocket.OPEN) {
+        client.send(message);
       }
-
-      if (data.type === 'signal') {
-        const targetUserId = data.targetUserId;
-        const targetClient = clients[targetUserId];
-        if (targetClient && targetClient.readyState === WebSocket.OPEN) {
-          targetClient.send(JSON.stringify(data));
-        } else {
-          console.error(`Cliente com userId ${targetUserId} não encontrado ou desconectado.`);
-        }
-        return;
-      }
-
-      // Para outros tipos de mensagens (e.g., 'join', 'leave'), broadcast para todos os clientes
-      wss.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(JSON.stringify(data));
-        }
-      });
-
-    } catch (error) {
-      console.error('Erro ao processar a mensagem recebida:', error);
-    }
+    });
   });
 
-  ws.on('close', (code, reason) => {
-    console.log(`Cliente WebSocket desconectado. Código: ${code}, Razão: ${reason}`);
-    // Remover o cliente do mapeamento
-    if (ws.userId) {
-      delete clients[ws.userId];
-      console.log(`Usuário removido: ${ws.userId}`);
-    }
-  });
-
-  ws.on('error', (error) => {
-    console.error('Erro no WebSocket:', error);
+  ws.on('close', () => {
+    console.log('Cliente WebSocket desconectado');
   });
 });
 
