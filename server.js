@@ -31,54 +31,58 @@ server.on('upgrade', (req, socket, head) => {
   }
 });
 
-// Função para monitorar conexões WebSocket inativas
-const monitorConnections = () => {
-  wss.clients.forEach((client) => {
-    if (client.isAlive === false) {
-      console.log('Conexão inativa removida');
-      return client.terminate();
-    }
-    client.isAlive = false;
-    client.ping(() => {}); // Envia um ping para verificar se a conexão está viva
-  });
-};
-
-// Intervalo para verificar as conexões a cada 30 segundos
-const interval = setInterval(monitorConnections, 30000);
+// Mapeamento de userId para WebSocket
+const clients = {};
 
 // Configuração do WebSocket
 wss.on('connection', (ws) => {
   console.log('Novo cliente WebSocket conectado');
-  ws.isAlive = true; // Define a conexão como ativa
 
-  // Ao receber um pong (resposta ao ping), marque a conexão como ativa
-  ws.on('pong', () => {
-    ws.isAlive = true;
-  });
-
-  // Tratamento de mensagens
   ws.on('message', (message) => {
     try {
       const data = JSON.parse(message); // Converte a mensagem para JSON
       console.log('Mensagem recebida:', data);
 
-      // Enviar a mensagem para todos os outros clientes conectados
+      if (data.type === 'register') {
+        // Registrar o userId
+        ws.userId = data.userId;
+        clients[data.userId] = ws;
+        console.log(`Usuário registrado: ${data.userId}`);
+        return;
+      }
+
+      if (data.type === 'signal') {
+        const targetUserId = data.targetUserId;
+        const targetClient = clients[targetUserId];
+        if (targetClient && targetClient.readyState === WebSocket.OPEN) {
+          targetClient.send(JSON.stringify(data));
+        } else {
+          console.error(`Cliente com userId ${targetUserId} não encontrado ou desconectado.`);
+        }
+        return;
+      }
+
+      // Para outros tipos de mensagens (e.g., 'join', 'leave'), broadcast para todos os clientes
       wss.clients.forEach((client) => {
-        if (client !== ws && client.readyState === WebSocket.OPEN) {
+        if (client.readyState === WebSocket.OPEN) {
           client.send(JSON.stringify(data));
         }
       });
+
     } catch (error) {
       console.error('Erro ao processar a mensagem recebida:', error);
     }
   });
 
-  // Tratamento de desconexão
   ws.on('close', (code, reason) => {
     console.log(`Cliente WebSocket desconectado. Código: ${code}, Razão: ${reason}`);
+    // Remover o cliente do mapeamento
+    if (ws.userId) {
+      delete clients[ws.userId];
+      console.log(`Usuário removido: ${ws.userId}`);
+    }
   });
 
-  // Tratamento de erros
   ws.on('error', (error) => {
     console.error('Erro no WebSocket:', error);
   });
@@ -87,9 +91,4 @@ wss.on('connection', (ws) => {
 // Iniciar o servidor HTTP
 server.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
-});
-
-// Quando o servidor é fechado, limpa o intervalo de monitoramento
-wss.on('close', () => {
-  clearInterval(interval);
 });
