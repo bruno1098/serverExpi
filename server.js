@@ -13,23 +13,10 @@ const server = http.createServer((req, res) => {
   }
 });
 
-// Porta dinâmica do Heroku ou local (8080)
 const PORT = process.env.PORT || 8080;
 
-// Criação do servidor WebSocket sobre o HTTP
-const wss = new WebSocket.Server({ noServer: true });
-
-// Lidar com a requisição de upgrade para WebSocket
-server.on('upgrade', (req, socket, head) => {
-  
-  if (req.url === '/ws') {  // Rota específica para o WebSocket
-    wss.handleUpgrade(req, socket, head, (ws) => {
-      wss.emit('connection', ws, req);
-    });
-  } else {
-    socket.destroy();
-  }
-});
+// Criar o servidor WebSocket usando o servidor HTTP
+const wss = new WebSocket.Server({ server });
 
 // Configuração do WebSocket
 wss.on('connection', (ws) => {
