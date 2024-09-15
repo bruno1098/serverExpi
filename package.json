@@ -6,9 +6,15 @@
         "start": "node server.js"
     },
     "dependencies": {
-        "ws": "^7.5.10"
+        "express": "^4.21.0",
+        "ws": "^7.5.10",
+        "wscat": "^5.2.1"
     },
     "engines": {
         "node": "14.x"
-    }
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "description": ""
 }
